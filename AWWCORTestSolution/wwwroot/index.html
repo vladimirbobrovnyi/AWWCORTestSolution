@@ -1,0 +1,266 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Список объявлений</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.0/css/bootstrap.min.css" rel="stylesheet" />
+    <script type="text/javascript" src="https://rawgit.com/moment/moment/2.2.1/min/moment.min.js"></script>
+</head>
+<body>
+    <h2>Список объявлений</h2>
+    <div id="errors" class="alert alert-danger" style="display:none;"></div>
+    <form name="adsForm">
+        <input type="hidden" name="id" value="0" />
+        <div class="form-group col-md-5">
+            <label for="name">Название:</label>
+            <input class="form-control" name="name" />
+        </div>
+        <div class="form-group col-md-5">
+            <label for="price">Цена:</label>
+            <input class="form-control" name="price" type="number" />
+        </div>
+        <div class="form-group col-md-5">
+            <label for="description">Описание:</label>
+            <input class="form-control" name="description" />
+        </div>
+        <div class="form-group col-md-5">
+            <input type="file" name="photo" multiple accept="image/*,image/jpeg">
+        </div>
+        <div class="panel-body">
+            <button type="submit" id="submit" class="btn btn-primary">Сохранить</button>
+            <button type="reset" id="reset" class="btn btn-primary">Сбросить</button>
+        </div>
+    </form>
+    <table class="table table-condensed table-striped  col-md-6">
+        <thead><tr><th>Id</th><th>Название</th><th>Цена</th><th>Дата создания</th><th>Описание</th><th>Фото</th></tr></thead>
+        <tbody>
+        </tbody>
+    </table>
+    <div>2021 © AWWCOR</div>
+
+
+    <script>
+        // Получение всех объявлений
+        async function GetAds() {
+            // отправляет запрос и получаем ответ
+            const response = await fetch("/api/ads", {
+                method: "GET",
+                headers: { "Accept": "application/json" }
+            });
+            // если запрос прошел нормально
+            if (response.ok === true) {
+                // получаем данные
+                const ads = await response.json();
+                let rows = document.querySelector("tbody");
+                ads.forEach(ad => {
+                    // добавляем полученные элементы в таблицу
+                    rows.append(row(ad));
+                });
+            }
+        }
+        // Получение одного объявления
+        async function GetAd(id) {
+            const response = await fetch("/api/ads/" + id, {
+                method: "GET",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.ok === true) {
+                const ad = await response.json();
+                console.log(ad.dateofcreate);
+                const form = document.forms["adsForm"];
+                form.elements["id"].value = ad.id;
+                form.elements["name"].value = ad.name;
+                form.elements["price"].value = ad.price;
+                form.elements["description"].value = ad.description;
+                form.elements["photo"].value = ad.mainphoto;
+            }
+        }
+        // Добавление пользователя
+        async function CreateAd(adName, adPrice, adDescription, adPhoto) {
+
+
+            const response = await fetch("api/ads", {
+                method: "POST",
+                headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: adName,
+                    price: parseInt(adPrice, 10),
+                    description: adDescription,
+                    mainphoto: adPhoto
+                })
+            });
+            
+            if (response.ok === true) {
+                const ad = await response.json();
+                reset();
+                document.querySelector("tbody").append(row(ad));
+            }
+            else {
+                const errorData = await response.json();
+                console.log("errors", errorData);
+                if (errorData) {
+                    // ошибки вследствие валидации по атрибутам
+                    if (errorData.errors) {
+                        if (errorData.errors["name"]) {
+                            addError(errorData.errors["name"]);
+                        }
+                        if (errorData.errors["description"]) {
+                            addError(errorData.errors["description"]);
+                        }
+                    }
+                    // кастомные ошибки, определенные в контроллере
+                    // добавляем ошибки свойства name
+                    if (errorData["name"]) {
+                        addError(errorData["name"]);
+                    }
+
+                    // добавляем ошибки свойства description
+                    if (errorData["description"]) {
+                        addError(errorData["description"]);
+                    }
+                }
+                document.getElementById("errors").style.display = "block";
+            }
+        }
+        // Изменение пользователя
+        async function EditAd(adId, adName, adPrice, adDescription, adPhoto) {
+            const response = await fetch("api/ads", {
+                method: "PUT",
+                headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: parseInt(adId, 10),
+                    name: adName,
+                    price: parseInt(adPrice, 10),
+                    description: adDescription,
+                    mainphoto: adPhoto
+                })
+            });
+            if (response.ok === true) {
+                const ad = await response.json();
+                reset();
+                document.querySelector("tr[data-rowid='" + ad.id + "']").replaceWith(row(ad));
+            }
+        }
+        // Удаление объявления
+        async function DeleteAd(id) {
+            const response = await fetch("/api/ads/" + id, {
+                method: "DELETE",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.ok === true) {
+                const ad = await response.json();
+                document.querySelector("tr[data-rowid='" + ad.id + "']").remove();
+            }
+        }
+
+        // сброс формы
+        function reset() {
+            const form = document.forms["adsForm"];
+            form.reset();
+            form.elements["id"].value = 0;
+        }
+
+        //Сообщения валидации
+        function addError(errors) {
+            errors.forEach(error => {
+                const p = document.createElement("p");
+                p.append(error);
+                document.getElementById("errors").append(p);
+            });
+        }
+
+        // создание строки для таблицы
+        function row(ad) {
+
+            const tr = document.createElement("tr");
+            tr.setAttribute("data-rowid", ad.id);
+
+            const idTd = document.createElement("td");
+            idTd.append(ad.id);
+            tr.append(idTd);
+
+            const nameTd = document.createElement("td");
+            nameTd.append(ad.name);
+            tr.append(nameTd);
+
+            const priceTd = document.createElement("td");
+            priceTd.append(ad.price);
+            tr.append(priceTd);
+
+            const dateofcreateTd = document.createElement("td");
+            dateofcreateTd.append(moment(ad.dateofcreate).format("D.MM.YYYY HH:mm"));
+            tr.append(dateofcreateTd);
+
+            const descriptionTd = document.createElement("td");
+            descriptionTd.append(ad.description);
+            tr.append(descriptionTd);
+
+            //const mainPhotoTd = document.createElement("td");
+            //mainPhotoTd.append(ad.mainphoto);
+            //tr.append(mainPhotoTd);
+
+            const photoImg = document.createElement("img");
+            photoImg.src = ad.mainphoto;
+            photoImg.width = 20;
+            photoImg.height = 20;
+            tr.append(photoImg);
+
+
+            const linksTd = document.createElement("td");
+
+            const editLink = document.createElement("a");
+            editLink.setAttribute("data-id", ad.id);
+            editLink.setAttribute("style", "cursor:pointer;padding:15px;");
+            editLink.append("Изменить");
+            editLink.addEventListener("click", e => {
+
+                e.preventDefault();
+                GetAd(ad.id);
+            });
+            linksTd.append(editLink);
+
+            const removeLink = document.createElement("a");
+            removeLink.setAttribute("data-id", ad.id);
+            removeLink.setAttribute("style", "cursor:pointer;padding:15px;");
+            removeLink.append("Удалить");
+            removeLink.addEventListener("click", e => {
+
+                e.preventDefault();
+                DeleteAd(ad.id);
+            });
+
+            linksTd.append(removeLink);
+            tr.appendChild(linksTd);
+
+            return tr;
+        }
+        // сброс значений формы
+        document.getElementById("reset").click(function (e) {
+
+            e.preventDefault();
+            reset();
+        })
+
+        // отправка формы
+        document.forms["adsForm"].addEventListener("submit", e => {
+            e.preventDefault();
+            const form = document.forms["adsForm"];
+            const id = form.elements["id"].value;
+            const name = form.elements["name"].value;
+            const price = form.elements["price"].value;
+            const description = form.elements["description"].value;
+            const mainphoto = form.elements["photo"].value;
+
+            if (id == 0)
+                CreateAd(name, price, description, mainphoto);
+            else
+                EditAd(id, name, price, description, mainphoto);
+        });
+
+        // загрузка объявлений
+        GetAds();
+
+    </script>
+</body>
+</html>
